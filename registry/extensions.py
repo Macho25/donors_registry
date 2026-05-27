@@ -4,6 +4,7 @@ in app.py.
 """
 
 import locale
+from sqlite3 import Connection
 from sqlite3 import Connection as SQLite3Connection
 
 import sqlite_icu
@@ -14,6 +15,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool.base import _ConnectionRecord
 
 bcrypt = Bcrypt()
 csrf_protect = CSRFProtect()
@@ -23,7 +25,9 @@ migrate = Migrate()
 
 
 @event.listens_for(Engine, "connect")
-def _set_sqlite_params(dbapi_connection, connection_record):
+def _set_sqlite_params(
+    dbapi_connection: Connection, connection_record: _ConnectionRecord
+) -> None:
     if isinstance(dbapi_connection, SQLite3Connection):
         # Create collation for proper sorting
         locale.setlocale(locale.LC_ALL, "cs_CZ.utf8")
@@ -31,7 +35,8 @@ def _set_sqlite_params(dbapi_connection, connection_record):
 
         # Load SQLite ICU extension for case-insensitive LIKE
         dbapi_connection.enable_load_extension(True)
-        dbapi_connection.load_extension(sqlite_icu.extension_path().replace(".so", ""))
+        ext_path: str = str(sqlite_icu.extension_path())
+        dbapi_connection.load_extension(ext_path.replace(".so", ""))
         dbapi_connection.enable_load_extension(False)
 
         # Activate foreign keys

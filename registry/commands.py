@@ -24,9 +24,9 @@ from tests.utils import (
 @click.argument("email")
 @click.argument("password")
 @with_appcontext
-def create_user(email, password):
+def create_user(email: str, password: str) -> None:
     """Create Flask user for given email and password."""
-    user = User(email, password)
+    user: User = User(email, password)
     user.active = True
     db.session.add(user)
     db.session.commit()
@@ -35,9 +35,8 @@ def create_user(email, password):
 @click.command()
 @click.option("--limit", default=None)
 @with_appcontext
-def install_test_data(limit):
+def install_test_data(limit: str | None = None) -> None:
     """Install test data from files to database."""
-    # Turn off SQLAlchemy logging (produces thousands of SQL queries)
     current_app.config["SQLALCHEMY_ECHO"] = False
 
     test_data_records(db, limit=int(limit) if limit else None)
@@ -49,7 +48,7 @@ def install_test_data(limit):
 
 @click.command("refresh-overview")
 @with_appcontext
-def refresh_overview():
+def refresh_overview() -> None:
     """Refresh DonorsOverview table."""
     DonorsOverview.refresh_overview()
 
@@ -57,21 +56,24 @@ def refresh_overview():
 @click.command("import-emails")
 @click.argument("csv_file")
 @with_appcontext
-def import_emails(csv_file):
+def import_emails(csv_file: str) -> None:
     """Import e-mails from CVS file to donors' notes"""
     current_app.config["SQLALCHEMY_ECHO"] = False
-    counter = Counter()
+    counter: Counter[str] = Counter()
 
     with open(csv_file, encoding="utf-8") as file:
         reader = csv.reader(file)
 
         for row in reader:
+            name: str
+            surname: str
+            rodne_cislo: str
+            email: str
             name, surname, rodne_cislo, email = row
 
             if not email:
                 continue
 
-            # Fix most common typos in e-mails
             if " " in email or "," in email:
                 email = email.replace(" ", "")
                 email = email.replace(",", ".")
@@ -81,12 +83,12 @@ def import_emails(csv_file):
                 counter["invalid emails"] += 1
                 continue
 
-            donor = db.session.get(DonorsOverview, rodne_cislo)
+            donor: DonorsOverview | None = db.session.get(DonorsOverview, rodne_cislo)
 
             if not donor:
                 continue
 
-            note = db.session.get(Note, rodne_cislo)
+            note: Note | None = db.session.get(Note, rodne_cislo)
 
             if note:
                 if email in note.note:
@@ -98,7 +100,9 @@ def import_emails(csv_file):
                     print("E-mail:", email, "added for", rodne_cislo)
                     counter["added to existing notes"] += 1
             else:
-                note = Note(rodne_cislo=rodne_cislo, note=email)
+                note = Note()
+                note.rodne_cislo = rodne_cislo
+                note.note = email
                 db.session.add(note)
                 print("New note for", rodne_cislo, "created with", email)
                 counter["new notes created"] += 1

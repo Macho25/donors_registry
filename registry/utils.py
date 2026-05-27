@@ -4,13 +4,16 @@ import datetime
 import os
 import re
 import smtplib
+from collections.abc import Generator
 from contextlib import contextmanager
 from email.message import EmailMessage
 from glob import glob
 from pathlib import Path
+from typing import Any
 
 from flask import flash, url_for
 from markupsafe import Markup
+from wtforms import Field, Form
 from wtforms.validators import DataRequired as OriginalDataRequired
 from wtforms.validators import ValidationError
 
@@ -24,9 +27,9 @@ PHONE_RE = r"(?:\+420|00420)\s?[1-9]\d{2}\s?\d{3}\s?\d{3}|(?<!\d)[1-9]\d{2}\s?\d
 RC_RE = r"\b\d{6}/\d{3,4}\b|\b\d{9,10}\b"
 
 
-def capitalize(string):
-    def get_replacement(match):
-        word = match[0]
+def capitalize(string: str) -> str:
+    def get_replacement(match: re.Match) -> str:
+        word: str = match[0]
         if word.isupper():
             return word.capitalize()
         else:
@@ -35,33 +38,33 @@ def capitalize(string):
     return re.sub(r"\w{2,}", get_replacement, string)
 
 
-def capitalize_first(string):
+def capitalize_first(string: str) -> str:
     return string[0].upper() + string[1:] if string else string
 
 
-def format_postal_code(code: str):
+def format_postal_code(code: str) -> str:
     return code[:3] + Markup("&nbsp;") + code[3:]
 
 
-def flash_errors(form, category="warning"):
+def flash_errors(form: Form, category: str = "warning") -> None:
     """Flash all errors for a form."""
     for field, errors in form.errors.items():
         for error in errors:
             flash(f"{getattr(form, field).label.text} - {error}", category)
 
 
-def template_globals():
+def template_globals() -> dict[str, Any]:
     """
     Injected into all templates
      - all medals are needed for the nav bar
     """
-    all_medals = Medals.query.all()
+    all_medals: list[Medals] = Medals.query.all()
     return dict(all_medals=all_medals)
 
 
 @contextmanager
-def cd(newdir):
-    prevdir = os.getcwd()
+def cd(newdir: str | os.PathLike[str]) -> Generator[None, None, None]:
+    prevdir: str = os.getcwd()
     os.chdir(os.path.expanduser(newdir))
     try:
         yield
@@ -69,9 +72,9 @@ def cd(newdir):
         os.chdir(prevdir)
 
 
-def get_list_of_images(folder):
+def get_list_of_images(folder: str) -> list[str]:
     """Returns list of all *.png files from given folder."""
-    result = []
+    result: list[str] = []
     with cd(Path(__file__).parent / "static"):
         for f in glob(f"{folder}/*.png"):
             result.append(url_for("static", filename=f))
@@ -85,7 +88,9 @@ class NumericValidator:
     exactly of a specified length.
     """
 
-    def __init__(self, length, msg_numeric=None, msg_length=None):
+    def __init__(
+        self, length: int, msg_numeric: str | None = None, msg_length: str | None = None
+    ) -> None:
         """
         :param int length: The exact length the field must have
         :param str msg_numeric: An error message for when the field contains forbidden
@@ -109,7 +114,7 @@ class NumericValidator:
         self.msg_numeric = msg_numeric
         self.msg_length = msg_length
 
-    def __call__(self, form, field):
+    def __call__(self, form: Form, field: Field) -> None:
         if field.data:
             if not field.data.isdigit():
                 raise ValidationError(self.msg_numeric)
@@ -118,7 +123,7 @@ class NumericValidator:
 
 
 class DataRequired(OriginalDataRequired):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super(OriginalDataRequired, self).__init__(*args, **kwargs)
         self.message = "Toto pole je povinné!"
 
@@ -154,23 +159,22 @@ degrees = {
 }
 
 
-def split_degrees(last_name):
-    original_last_name = last_name
-    detected_degrees = []
-    order_by_indexes = []
+def split_degrees(last_name: str) -> tuple[str, str]:
+    original_last_name: str = last_name
+    detected_degrees: list[str] = []
+    order_by_indexes: list[int] = []
     for regex, correct_form in degrees.items():
         result = re.search(regex, last_name, re.IGNORECASE)
         if result:
             detected_degrees.append(correct_form)
             parts = last_name.split(result.group())
             last_name = " ".join((p.strip() for p in parts))
-            # To be able to order degrees as they were in the original
-            # input, we have to get their possition from the original input.
             result = re.search(regex, original_last_name, re.IGNORECASE)
+            assert result is not None
             order_by_indexes.append(result.span()[0])
 
-    last_name_prepared = last_name.strip().rstrip(",").strip()
-    degrees_sorted = sorted(
+    last_name_prepared: str = last_name.strip().rstrip(",").strip()
+    degrees_sorted: list[str] = sorted(
         detected_degrees,
         key=lambda degree: order_by_indexes[detected_degrees.index(degree)],
     )
@@ -178,11 +182,13 @@ def split_degrees(last_name):
     return last_name_prepared, " ".join(degrees_sorted)
 
 
-def record_as_input_data(record, donation_count=None, sum_with_last=False):
+def record_as_input_data(
+    record: Any, donation_count: str | None = None, sum_with_last: bool = False
+) -> str:
     """Takes Record or DonorOverview and prepares it
     as new input data"""
 
-    fields = [
+    fields: list[str] = [
         "rodne_cislo",
         "first_name",
         "last_name",
@@ -192,49 +198,52 @@ def record_as_input_data(record, donation_count=None, sum_with_last=False):
         "kod_pojistovny",
         "donation_count",
     ]
-    values = [str(getattr(record, field)) for field in fields]
+    values: list[str] = [str(getattr(record, field)) for field in fields]
     if donation_count:
         if sum_with_last:
             values[-1] = f"{values[-1]}+{donation_count}"
         else:
             values[-1] = donation_count
-    line = ";".join(values)
+    line: str = ";".join(values)
     line += "\r\n"
     return line
 
 
-def date_of_birth_from_rc(rodne_cislo):
+def date_of_birth_from_rc(rodne_cislo: str) -> str:
+    first: str
+    second: str
+    third: str
     first, second, third, *rest = [
         rodne_cislo[i : i + 2] for i in range(0, len(rodne_cislo), 2)
     ]
 
-    # YYMMDD/XXXX is a valid format since 1954.
-    # If it's shorter, it's more likely from 1900s than 2000s.
     if len(rodne_cislo) == 11 and int(first) < 54:
-        year = f"20{first}"
+        year: str = f"20{first}"
     else:
         year = f"19{first}"
 
-    month = int(second)
+    month: int = int(second)
     if second[0] in ("2", "3", "5", "6", "7", "8"):
         month -= int(f"{second[0]}0")
 
-    day = int(third)
+    day: int = int(third)
 
     return f"{day}. {month}. {year}"
 
 
-def donor_as_row(donor):
+def donor_as_row(donor: Any) -> list[Any]:
     """Takes donor and returns line with:
     name;surname;date of birth;address;city;postal_code;kod_pojistovny;donation_centers
     """
-    donation_centers = DonationCenter.query.order_by(DonationCenter.slug.desc()).all()
-    dcs_list = []
+    donation_centers: list[DonationCenter] = DonationCenter.query.order_by(
+        DonationCenter.slug.desc()
+    ).all()
+    dcs_list: list[str] = []
     for dc in donation_centers:
         if getattr(donor, f"donation_count_{dc.slug}") > 0:
             dcs_list.append(dc.title)
 
-    result = [
+    result: list[Any] = [
         donor.first_name,
         donor.last_name,
         date_of_birth_from_rc(donor.rodne_cislo),
@@ -248,7 +257,9 @@ def donor_as_row(donor):
     return result
 
 
-def send_email_with_award_doc(to, award_doc_content, medal, config):
+def send_email_with_award_doc(
+    to: str, award_doc_content: bytes, medal: Medals, config: dict[str, Any]
+) -> None:
     msg = EmailMessage()
     msg["From"] = config["EMAIL_SENDER"]
     msg["To"] = to
@@ -270,13 +281,17 @@ def send_email_with_award_doc(to, award_doc_content, medal, config):
     )
 
     if medal.slug in ("br", "st"):
-        msg_middle_part = f"{capitalize_first(medal.title_acc)}, si prosím vyzvedněte na odběrném místě, kde darujete krev či plazmu.\n\n"
+        msg_middle_part: str = (
+            f"{capitalize_first(medal.title_acc)}, si prosím vyzvedněte na odběrném místě, kde darujete krev či plazmu.\n\n"
+        )
     elif medal.slug in ("zl", "kr3"):
         msg_middle_part = "Předávání ocenění se uskuteční na podzim v Třinci a Frýdku-Místku dle Vašeho odběrného místa. Pozvánka na slavnostní oceňování Vám dorazi s dostatečným předstihem.\n\n"
     elif medal.slug in ("kr2", "kr1", "plk"):
         msg_middle_part = (
             "Pozvánku na slavnostní oceňování obdržíte s dostatečným předstihem.\n\n"
         )
+    else:
+        msg_middle_part = ""
 
     msg.set_content(msg_first_part + msg_middle_part + msg_last_part)
 
@@ -293,13 +308,13 @@ def send_email_with_award_doc(to, award_doc_content, medal, config):
         server.send_message(msg)
 
 
-def get_empty_str_if_none(dictionary, key):
+def get_empty_str_if_none(dictionary: dict[str, Any], key: str) -> Any:
     """Returns empty string if the value for the given key is None"""
-    value = dictionary.get(key, "")
+    value: Any = dictionary.get(key, "")
     return value if value is not None else ""
 
 
-def is_valid_rc(value):
+def is_valid_rc(value: str) -> bool:
     """
     Validates Czech birth number (rodné číslo).
     Supports:
@@ -311,44 +326,36 @@ def is_valid_rc(value):
     if not isinstance(value, str):
         return False
 
-    # remove slash and spaces
-    rc = re.sub(r"[^\d]", "", value)
+    rc: str = re.sub(r"[^\d]", "", value)
 
     if len(rc) not in (9, 10):
         return False
 
-    yy = int(rc[0:2])
-    mm = int(rc[2:4])
-    dd = int(rc[4:6])
+    yy: int = int(rc[0:2])
+    mm: int = int(rc[2:4])
+    dd: int = int(rc[4:6])
 
-    # adjust month (women +50)
     if mm > 50:
         mm -= 50
 
-    # month validity
     if not 1 <= mm <= 12:
         return False
 
-    # year resolution
     if len(rc) == 9:
-        # pre-1954
-        year = 1900 + yy
+        year: int = 1900 + yy
         if year >= 1954:
             return False
     else:
-        # 10 digits
         year = 1900 + yy if yy >= 54 else 2000 + yy
 
-    # date validity
     try:
         datetime.date(year, mm, dd)
     except ValueError:
         return False
 
-    # checksum for 10-digit RC
     if len(rc) == 10:
-        num = int(rc[:9])
-        check = num % 11
+        num: int = int(rc[:9])
+        check: int = num % 11
         if check == 10:
             check = 0
         if check != int(rc[9]):
