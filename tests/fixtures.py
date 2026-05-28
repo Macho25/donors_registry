@@ -7,9 +7,14 @@ from pathlib import Path
 from random import sample, shuffle
 from shutil import copy
 from tempfile import NamedTemporaryFile
-from unittest.mock import MagicMock, patch
+from typing import Iterator
+from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
+import webtest.app
+from flask.app import Flask
 from flask_migrate import Migrate, upgrade
+from flask_sqlalchemy.extension import SQLAlchemy
+from pandas import DataFrame
 from pytest import fixture
 from sqlalchemy.exc import IntegrityError
 from webtest import TestApp
@@ -18,8 +23,7 @@ from registry.app import create_app
 from registry.donor.models import DonorsOverview, IgnoredDonors, Note
 from registry.extensions import db as _db
 from registry.user.models import User
-
-from .utils import (
+from tests.utils import (
     get_test_data_df,
     test_data_ignored,
     test_data_medals,
@@ -34,7 +38,7 @@ TEST_DB_PATH = Path("instance") / "test.sqlite"
 
 
 @fixture(scope="session")
-def app():
+def app() -> Iterator[Flask]:
     """Create application for the tests."""
     _app = create_app("tests.settings")
     _app.logger.setLevel(logging.CRITICAL)
@@ -47,13 +51,13 @@ def app():
 
 
 @fixture
-def testapp(app):
+def testapp(app: Flask) -> webtest.app.TestApp:
     """Create Webtest app."""
     return TestApp(app)
 
 
 @fixture(scope="function", autouse=True)
-def db(app):
+def db(app: Flask) -> Iterator[SQLAlchemy]:
     """Create database for the tests."""
     _db.app = app
 
@@ -84,7 +88,7 @@ def db(app):
 
 
 @fixture(scope="function")
-def user(db):
+def user(db: SQLAlchemy) -> User:
     """Create user for the tests."""
     user = User("test@example.com", "test123")
     user.test_password = "test123"
@@ -101,12 +105,12 @@ def user(db):
 
 
 @fixture(scope="session")
-def test_data_df():
+def test_data_df() -> DataFrame:
     """The same data we have in test database but in form of Pandas DataFrame"""
     return get_test_data_df(TEST_RECORDS)
 
 
-def sample_of_rc(amount=100):
+def sample_of_rc(amount: int = 100) -> Iterator[str]:
     """Yields random sample of RC from test data"""
     test_data = get_test_data_df(TEST_RECORDS)
     dcs = test_data.MISTO_ODBERU.unique()
@@ -118,7 +122,7 @@ def sample_of_rc(amount=100):
         yield sample(list(test_data[test_data.MISTO_ODBERU == dc].RC.unique()), 1)[0]
 
 
-def new_rc_if_ignored(rodne_cislo):
+def new_rc_if_ignored(rodne_cislo: str) -> str:
     while True:
         if _db.session.get(IgnoredDonors, rodne_cislo):
             rodne_cislo = next(sample_of_rc(1))
@@ -127,7 +131,7 @@ def new_rc_if_ignored(rodne_cislo):
 
 
 @fixture(scope="session", autouse=True)
-def empty_stamp_png():
+def empty_stamp_png() -> Iterator[None]:
     with NamedTemporaryFile(
         dir="registry/static/stamps", suffix=".png"
     ), NamedTemporaryFile(dir="registry/static/signatures", suffix=".png"):
@@ -135,14 +139,14 @@ def empty_stamp_png():
 
 
 @fixture
-def mock_smtp():
+def mock_smtp() -> Iterator[NonCallableMagicMock]:
     with patch("smtplib.SMTP", autospec=True) as mock_smtp_class:
         mock_instance = mock_smtp_class.return_value
         mock_instance.send_message = MagicMock()
         yield mock_instance
 
 
-def delete_note_if_exists(rodne_cislo):
+def delete_note_if_exists(rodne_cislo: str) -> None:
     if (note := _db.session.get(Note, rodne_cislo)) is not None:
         _db.session.delete(note)
         _db.session.commit()

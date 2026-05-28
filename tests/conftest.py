@@ -1,4 +1,7 @@
-from .fixtures import (  # noqa: F401
+from _pytest.main import Session
+from pytest import ExitCode
+
+from tests.fixtures import (  # noqa: F401
     BACKUP_DB_PATH,
     TEST_DB_PATH,
     app,
@@ -11,7 +14,7 @@ from .fixtures import (  # noqa: F401
 )
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: Session, exitstatus: ExitCode) -> None:
     try:
         BACKUP_DB_PATH.unlink()
     except FileNotFoundError:

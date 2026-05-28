@@ -12,9 +12,8 @@ from registry.utils import (
     is_valid_rc,
     split_degrees,
 )
-
-from .fixtures import sample_of_rc
-from .helpers import FakeForm, login
+from tests.fixtures import sample_of_rc
+from tests.helpers import FakeForm, login
 
 
 class TestNumericValidator:

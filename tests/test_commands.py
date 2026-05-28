@@ -1,3 +1,5 @@
+from flask.app import Flask
+
 from registry.commands import (
     create_user,
     import_emails,
@@ -17,14 +19,14 @@ from registry.user.models import User
 
 
 class TestCommands:
-    def test_add_user(self, app):
+    def test_add_user(self, app: Flask) -> None:
         email = "test_user_1@example.com"
         runner = app.test_cli_runner()
         runner.invoke(create_user, [email, "supersecretpass"])
         user = User.query.filter(User.email == email)
         assert user is not None
 
-    def test_install_test_data_refresh_overview(self, app):
+    def test_install_test_data_refresh_overview(self, app: Flask) -> None:
         limit = 10
         runner = app.test_cli_runner()
 
@@ -52,7 +54,7 @@ class TestCommands:
         )
         assert unique_do == unique_records
 
-    def test_import_emails(self, app):
+    def test_import_emails(self, app: Flask) -> None:
         runner = app.test_cli_runner()
 
         # Existing empty note

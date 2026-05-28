@@ -2,6 +2,8 @@ from random import randint
 
 import pytest
 from flask import url_for
+from pandas import DataFrame
+from webtest.app import TestApp
 
 from registry.donor.models import (
     DonationCenter,
@@ -10,14 +12,14 @@ from registry.donor.models import (
     IgnoredDonors,
 )
 from registry.extensions import db
-
-from .fixtures import new_rc_if_ignored, sample_of_rc
-from .helpers import login
+from registry.user.models import User
+from tests.fixtures import new_rc_if_ignored, sample_of_rc
+from tests.helpers import login
 
 
 class TestDonorsOverview:
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(100))
-    def test_refresh_overview(self, rodne_cislo, test_data_df):
+    def test_refresh_overview(self, rodne_cislo: str, test_data_df: DataFrame) -> None:
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         # Check of the total amount of donations
         donor_overview = DonorsOverview.query.filter_by(rodne_cislo=rodne_cislo).first()
@@ -68,7 +70,7 @@ class TestDonorsOverview:
 
 class TestIgnore:
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(10))
-    def test_ignore(self, user, testapp, rodne_cislo):
+    def test_ignore(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.show_ignored"))
@@ -103,7 +105,7 @@ class TestIgnore:
         do = testapp.get(url_for("donor.detail", rc=rodne_cislo), status=200)
         assert do.status_code == 200
 
-    def test_ignore_already_ignored(self, user, testapp):
+    def test_ignore_already_ignored(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         ignored_count = IgnoredDonors.query.count()
         already_ignored_rc = IgnoredDonors.query.first().rodne_cislo
@@ -115,7 +117,7 @@ class TestIgnore:
         assert "Dárce již je v seznamu ignorovaných" in res
         assert ignored_count == IgnoredDonors.query.count()
 
-    def test_ignore_no_reason(self, user, testapp):
+    def test_ignore_no_reason(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         ignored_count = IgnoredDonors.query.count()
         rodne_cislo = DonorsOverview.query.order_by(
@@ -129,7 +131,7 @@ class TestIgnore:
         assert "Při přidávání do ignorovaných došlo k chybě" in res
         assert ignored_count == IgnoredDonors.query.count()
 
-    def test_unignore_not_ignored(self, user, testapp):
+    def test_unignore_not_ignored(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         ignored_count = IgnoredDonors.query.count()
         rodne_cislo = DonorsOverview.query.order_by(
@@ -145,7 +147,7 @@ class TestIgnore:
 
 class TestOverride:
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(5))
-    def test_override(self, user, testapp, rodne_cislo):
+    def test_override(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))
@@ -187,7 +189,7 @@ class TestOverride:
         assert ("Jméno: " + str(old_data.first_name)) in res
         assert ("Příjmení: " + str(old_data.last_name)) in res
 
-    def test_get_overrides_json_endpoint(self, user, testapp):
+    def test_get_overrides_json_endpoint(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         res = testapp.get(url_for("donor.get_overrides"))
         overrides = DonorsOverride.query.all()
@@ -197,7 +199,7 @@ class TestOverride:
             assert len(DonorsOverview.basic_fields) == len(override)
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(1))
-    def test_incorrect_override(self, user, testapp, rodne_cislo):
+    def test_incorrect_override(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))
@@ -212,7 +214,7 @@ class TestOverride:
         assert "Stránka, kterou hledáte, neexistuje" in res
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(1))
-    def test_form_errors(self, user, testapp, rodne_cislo):
+    def test_form_errors(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))

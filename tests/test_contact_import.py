@@ -17,9 +17,12 @@ from registry.batch.utils import (
 from registry.donor.models import Note
 from registry.extensions import db
 from registry.utils import EMAIL_RE, PHONE_RE, RC_RE, is_valid_rc
-
-from .fixtures import delete_note_if_exists, new_rc_if_ignored, sample_of_rc
-from .helpers import login
+from tests.fixtures import (
+    delete_note_if_exists,
+    new_rc_if_ignored,
+    sample_of_rc,
+)
+from tests.helpers import login
 
 
 class TestRegexPatterns:

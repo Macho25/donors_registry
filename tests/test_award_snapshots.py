@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 import pytest
 from flask import url_for
+from flask_sqlalchemy.extension import SQLAlchemy
+from webtest.app import TestApp
 
 from registry.donor.models import (
     AwardEligibilitySnapshot,
@@ -13,15 +15,17 @@ from registry.donor.models import (
 )
 from registry.extensions import db
 from registry.list.models import DonationCenter, Medals
-
-from .helpers import login
+from registry.user.models import User
+from tests.helpers import login
 
 
 class TestAwardEligibilitySnapshot:
     """Tests for the award eligibility snapshot functionality."""
 
     @pytest.mark.parametrize("medal_slug", ["br", "st", "zl"])
-    def test_snapshot_not_created_for_lower_medals(self, user, testapp, medal_slug):
+    def test_snapshot_not_created_for_lower_medals(
+        self, user: User, testapp: TestApp, medal_slug: str
+    ):
         """Bronze, silver, and gold medals should not use snapshots (year-round processing)."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == medal_slug).first()
@@ -38,7 +42,7 @@ class TestAwardEligibilitySnapshot:
 
     @pytest.mark.parametrize("medal_slug", ["kr3", "kr2", "kr1", "plk"])
     def test_snapshot_not_auto_created_for_higher_medals(
-        self, user, testapp, medal_slug
+        self, user: User, testapp: TestApp, medal_slug: str
     ):
         """Higher medals should show warning when snapshot doesn't exist, not auto-create."""
         login(user, testapp)
@@ -65,7 +69,9 @@ class TestAwardEligibilitySnapshot:
         assert snapshot_count == 0
 
     @pytest.mark.parametrize("medal_slug", ["kr3", "kr2"])
-    def test_manual_snapshot_creation(self, user, testapp, medal_slug):
+    def test_manual_snapshot_creation(
+        self, user: User, testapp: TestApp, medal_slug: str
+    ):
         """Snapshots should be created manually via button."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == medal_slug).first()
@@ -98,7 +104,9 @@ class TestAwardEligibilitySnapshot:
         assert "již existuje" in page2
 
     @pytest.mark.parametrize("medal_slug", ["br", "st", "zl"])
-    def test_create_snapshot_for_non_snapshot_medal(self, user, testapp, medal_slug):
+    def test_create_snapshot_for_non_snapshot_medal(
+        self, user: User, testapp: TestApp, medal_slug: str
+    ):
         """Creating snapshot for bronze/silver/gold should fail with error message."""
         login(user, testapp)
 
@@ -109,7 +117,9 @@ class TestAwardEligibilitySnapshot:
 
         assert "nevyužívá snapshoty" in page
 
-    def test_snapshot_excludes_donors_who_donated_after_cutoff(self, db):
+    def test_snapshot_excludes_donors_who_donated_after_cutoff(
+        self, db: SQLAlchemy
+    ) -> None:
         """Snapshot should only include donors eligible as of snapshot creation time."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()  # kr3 = 80 donations
         current_year = datetime.now().year
@@ -174,7 +184,7 @@ class TestAwardEligibilitySnapshot:
         ).first()
         assert eligible is None
 
-    def test_snapshot_includes_donors_eligible_at_cutoff(self, db):
+    def test_snapshot_includes_donors_eligible_at_cutoff(self, db: SQLAlchemy) -> None:
         """Snapshot should include donors who met requirements by snapshot creation time."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()  # kr3 = 80 donations
         current_year = datetime.now().year
@@ -216,7 +226,7 @@ class TestAwardEligibilitySnapshot:
         assert eligible is not None
         assert eligible.rodne_cislo == rodne_cislo
 
-    def test_snapshot_excludes_already_awarded_donors(self, db):
+    def test_snapshot_excludes_already_awarded_donors(self, db: SQLAlchemy) -> None:
         """Snapshot should not include donors who already have the medal."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()
         current_year = datetime.now().year
@@ -242,7 +252,7 @@ class TestAwardEligibilitySnapshot:
         ).first()
         assert eligible is None
 
-    def test_snapshot_handles_multiple_donation_centers(self, db):
+    def test_snapshot_handles_multiple_donation_centers(self, db: SQLAlchemy) -> None:
         """Snapshot should correctly sum donations from multiple centers."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()  # kr3 = 80 donations
         current_year = datetime.now().year
@@ -306,7 +316,9 @@ class TestAwardEligibilitySnapshot:
         ).first()
         assert eligible is not None
 
-    def test_get_eligible_rodne_cisla_returns_none_when_no_snapshot(self, db):
+    def test_get_eligible_rodne_cisla_returns_none_when_no_snapshot(
+        self, db: SQLAlchemy
+    ) -> None:
         """get_eligible_rodne_cisla should return None if snapshot doesn't exist."""
         medal = Medals.query.filter(Medals.slug == "kr1").first()
         current_year = datetime.now().year
@@ -323,7 +335,7 @@ class TestAwardEligibilitySnapshot:
         )
         assert result is None
 
-    def test_get_eligible_rodne_cisla_returns_list(self, db):
+    def test_get_eligible_rodne_cisla_returns_list(self, db: SQLAlchemy) -> None:
         """get_eligible_rodne_cisla should return list when snapshot exists."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()
         current_year = datetime.now().year
@@ -339,7 +351,7 @@ class TestAwardEligibilitySnapshot:
         assert isinstance(result, list)
         assert len(result) > 0
 
-    def test_snapshot_created_at_timestamp(self, db):
+    def test_snapshot_created_at_timestamp(self, db: SQLAlchemy) -> None:
         """Snapshots should have created_at timestamp set."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()
         current_year = datetime.now().year
@@ -363,7 +375,7 @@ class TestAwardEligibilitySnapshot:
 
     @pytest.mark.parametrize("medal_slug", ["kr3", "kr2"])
     def test_awarding_medal_removes_from_award_prep_list(
-        self, user, testapp, medal_slug
+        self, user: User, testapp: TestApp, medal_slug: str
     ):
         """After awarding a medal, donor should not appear in award prep (snapshot-based)."""
         login(user, testapp)
@@ -391,7 +403,7 @@ class TestAwardEligibilitySnapshot:
         remaining_rcs = [f.value for f in form.fields["rodne_cislo"]]
         assert first_rc not in remaining_rcs
 
-    def test_snapshot_count_matches_eligible_donors(self, db):
+    def test_snapshot_count_matches_eligible_donors(self, db: SQLAlchemy) -> None:
         """Number of snapshot entries should match eligible, non-awarded donors."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()
         current_year = datetime.now().year
@@ -406,7 +418,7 @@ class TestAwardEligibilitySnapshot:
 
         assert snapshot_count == count
 
-    def test_download_table_with_no_snapshot(self, user, testapp):
+    def test_download_table_with_no_snapshot(self, user: User, testapp: TestApp):
         """Download table without snapshot should redirect with error."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == "kr3").first()
@@ -426,7 +438,9 @@ class TestAwardEligibilitySnapshot:
         assert "nebyl dosud vytvořen snapshot" in response
         assert response.status_code == 200
 
-    def test_download_table_with_empty_snapshot(self, user, testapp, db):
+    def test_download_table_with_empty_snapshot(
+        self, user: User, testapp: TestApp, db: SQLAlchemy
+    ):
         """Download table with empty snapshot should redirect with warning."""
         login(user, testapp)
         medal = Medals.query.filter(
@@ -457,7 +471,7 @@ class TestAwardEligibilitySnapshot:
         assert "neobsahuje žádné oprávněné dárce" in response
         assert response.status_code == 200
 
-    def test_award_documents_respect_snapshot(self, user, testapp):
+    def test_award_documents_respect_snapshot(self, user: User, testapp: TestApp):
         """Award documents endpoint should respect snapshots."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == "kr3").first()
@@ -476,7 +490,7 @@ class TestAwardEligibilitySnapshot:
 
         assert "nebyl dosud vytvořen snapshot" in response
 
-    def test_envelope_labels_respect_snapshot(self, user, testapp):
+    def test_envelope_labels_respect_snapshot(self, user: User, testapp: TestApp):
         """Envelope labels endpoint should respect snapshots."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == "kr3").first()
@@ -496,7 +510,7 @@ class TestAwardEligibilitySnapshot:
 
         assert "nebyl dosud vytvořen snapshot" in response
 
-    def test_envelope_respect_snapshot(self, user, testapp):
+    def test_envelope_respect_snapshot(self, user: User, testapp: TestApp):
         """Envelope endpoint should respect snapshots."""
         login(user, testapp)
         medal = Medals.query.filter(Medals.slug == "kr3").first()
@@ -516,7 +530,7 @@ class TestAwardEligibilitySnapshot:
 
         assert "nebyl dosud vytvořen snapshot" in response
 
-    def test_create_snapshot_twice_returns_same_count(self, db):
+    def test_create_snapshot_twice_returns_same_count(self, db: SQLAlchemy) -> None:
         """Calling create_snapshot twice should return the same count without duplicates."""
         medal = Medals.query.filter(Medals.slug == "kr3").first()
         current_year = datetime.now().year

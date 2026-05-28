@@ -8,8 +8,7 @@ from flask import url_for
 from sqlalchemy.exc import IntegrityError
 
 from registry.donor.models import Batch, Record
-
-from .helpers import login
+from tests.helpers import login
 
 
 class TestPublicInterface:

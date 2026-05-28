@@ -1,9 +1,12 @@
 import re
 from datetime import datetime
 from operator import eq, gt, lt, ne
+from typing import Callable
 
 import pytest
 from flask import url_for
+from flask_sqlalchemy.extension import SQLAlchemy
+from webtest.app import TestApp
 
 from registry.donor.models import (
     AwardedMedals,
@@ -12,15 +15,15 @@ from registry.donor.models import (
     Medals,
 )
 from registry.extensions import db
-
-from .fixtures import new_rc_if_ignored, sample_of_rc
-from .helpers import login
+from registry.user.models import User
+from tests.fixtures import new_rc_if_ignored, sample_of_rc
+from tests.helpers import login
 
 
 class TestMedals:
     # TODO: Find a better way to parametrize this
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_award_medal(self, user, testapp, medal_id):
+    def test_award_medal(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
         awarded = AwardedMedals.query.count()
         awarded_do = DonorsOverview.query.filter(
@@ -78,7 +81,7 @@ class TestMedals:
 
     # TODO: Find a better way to parametrize this
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_remove_medal(self, user, testapp, medal_id):
+    def test_remove_medal(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
         do = DonorsOverview.query.filter(
             getattr(DonorsOverview, "awarded_medal_" + medal.slug) == 1
@@ -101,7 +104,7 @@ class TestMedals:
 
     # TODO: Find a better way to parametrize this
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_award_one_medal(self, user, testapp, medal_id):
+    def test_award_one_medal(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
         do = DonorsOverview.query.filter(
             getattr(DonorsOverview, "awarded_medal_" + medal.slug) == 0
@@ -123,7 +126,7 @@ class TestMedals:
         assert awarded_medal.awarded_at.date() == datetime.now().date()
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(10))
-    def test_medal_amount(self, user, testapp, rodne_cislo):
+    def test_medal_amount(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))
@@ -134,7 +137,9 @@ class TestMedals:
         assert medal_amount == len(re.findall('title="Odebrat medaili"', res.text))
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(10))
-    def test_medal_eligibility(self, user, testapp, db, rodne_cislo):
+    def test_medal_eligibility(
+        self, user: User, testapp: TestApp, db: SQLAlchemy, rodne_cislo: str
+    ):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         do = db.session.get(DonorsOverview, rodne_cislo)
         medals = Medals.query.all()
@@ -153,7 +158,7 @@ class TestMedals:
         assert el_medal_amount == len(re.findall('title="Udělit medaili"', res.text))
         assert unel_medal_amount == len(re.findall("(Nemá nárok)", res.text))
 
-    def test_award_nonexisting_medal(self, user, testapp):
+    def test_award_nonexisting_medal(self, user: User, testapp: TestApp):
         awarded = AwardedMedals.query.count()
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug="br"))
@@ -162,7 +167,7 @@ class TestMedals:
         assert "Odeslána nevalidní data" in page
         assert awarded == AwardedMedals.query.count()
 
-    def test_award_invalid_rc(self, user, testapp):
+    def test_award_invalid_rc(self, user: User, testapp: TestApp):
         awarded = AwardedMedals.query.count()
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug="br"))
@@ -171,7 +176,7 @@ class TestMedals:
         assert "Odeslána nevalidní data" in page
         assert awarded == AwardedMedals.query.count()
 
-    def test_remove_nonexisting_medal(self, user, testapp):
+    def test_remove_nonexisting_medal(self, user: User, testapp: TestApp):
         awarded = AwardedMedals.query.count()
         login(user, testapp)
         # First rodne cislo with some medal and not ignored
@@ -204,7 +209,9 @@ class TestMedals:
             (gt, 6, 5),
         ),
     )
-    def test_medal_sorting(self, operator, medal, other_medal):
+    def test_medal_sorting(
+        self, operator: Callable, medal: int, other_medal: int
+    ) -> None:
         medal = db.session.get(Medals, medal)
         other_medal = db.session.get(Medals, other_medal)
         assert operator(medal, other_medal)

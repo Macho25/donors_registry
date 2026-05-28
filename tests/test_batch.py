@@ -2,16 +2,17 @@ from random import choice
 
 import pytest
 from flask import url_for
+from webtest.app import TestApp
 
 from registry.donor.models import Batch, Record
 from registry.extensions import db
-
-from .helpers import login
+from registry.user.models import User
+from tests.helpers import login
 
 
 class TestBatch:
     @pytest.mark.parametrize("batch_id", range(1, 11))
-    def test_batch_list(self, user, testapp, batch_id):
+    def test_batch_list(self, user: User, testapp: TestApp, batch_id: int) -> None:
         """Just a simple test that the detail page loads for some random donors"""
         login(user, testapp)
         res = testapp.get(url_for("batch.batch_list"))
@@ -23,7 +24,7 @@ class TestBatch:
         assert "<td></td>" not in res
 
     @pytest.mark.parametrize("unused", range(1, 6))
-    def test_delete_batch(self, user, testapp, unused):
+    def test_delete_batch(self, user: User, testapp: TestApp, unused: int) -> None:
         login(user, testapp)
         res = testapp.get(url_for("batch.batch_list"))
         # Take and submit random form
@@ -34,7 +35,7 @@ class TestBatch:
         assert db.session.get(Batch, batch_id) is None
         assert Record.query.filter(Record.batch_id == batch_id).count() == 0
 
-    def test_delete_nonexisting_batch(self, user, testapp):
+    def test_delete_nonexisting_batch(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         res = testapp.get(url_for("batch.batch_list"))
         form = res.forms[0]
@@ -45,7 +46,7 @@ class TestBatch:
         assert "Při odebrání dávky došlo k chybě." in res
 
     @pytest.mark.parametrize("unused", range(1, 11))
-    def test_batch_detail(self, user, testapp, unused):
+    def test_batch_detail(self, user: User, testapp: TestApp, unused: int) -> None:
         login(user, testapp)
         batch_id = choice([b.id for b in Batch.query.all()])
         res = testapp.get(url_for("batch.batch_detail", id=batch_id))
@@ -58,7 +59,7 @@ class TestBatch:
         assert res.text.count("<td>") == records_count * res.text.count("<th>")
 
     @pytest.mark.parametrize("unused", range(1, 11))
-    def test_download_batch(self, user, testapp, unused):
+    def test_download_batch(self, user: User, testapp: TestApp, unused: int) -> None:
         login(user, testapp)
         batch_id = choice([b.id for b in Batch.query.all()])
         res = testapp.get(url_for("batch.batch_detail", id=batch_id))
@@ -68,7 +69,7 @@ class TestBatch:
         assert ";;" not in batch_file.text
         assert ";\n" not in batch_file.text
 
-    def test_download_batch_compare_file(self, user, testapp):
+    def test_download_batch_compare_file(self, user: User, testapp: TestApp) -> None:
         login(user, testapp)
         res = testapp.get(url_for("batch.batch_detail", id=7))
         batch_file = res.click(description="Stáhnout soubor s dávkou")

@@ -1,11 +1,14 @@
 import locale
 from functools import cmp_to_key
 from operator import ge, le
+from typing import Tuple
 
 import pytest
 from flask import url_for
+from flask_sqlalchemy.extension import SQLAlchemy
 from sqlalchemy import and_, extract
 from sqlalchemy.sql import text
+from webtest.app import TestApp
 
 from registry.donor.models import (
     AwardedMedals,
@@ -15,18 +18,18 @@ from registry.donor.models import (
 )
 from registry.extensions import db
 from registry.list.models import Medals
+from registry.user.models import User
 from tests.fixtures import (
     delete_note_if_exists,
     new_rc_if_ignored,
     sample_of_rc,
 )
-
-from .helpers import login
+from tests.helpers import login
 
 
 class TestDataTablesBackend:
     @pytest.mark.parametrize("limit", (5, 10, 20, 50))
-    def test_json_backend_limit(self, user, testapp, limit):
+    def test_json_backend_limit(self, user: User, testapp: TestApp, limit: int) -> None:
         # This is very limited subset of what datatables frontend
         # sends to the backend but it's enough for the simple test.
         params = {
@@ -44,7 +47,9 @@ class TestDataTablesBackend:
         assert len(res.json["data"]) == limit
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(10))
-    def test_json_backend_search(self, user, testapp, rodne_cislo):
+    def test_json_backend_search(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ) -> None:
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         params = {
             "draw": "1",
@@ -61,7 +66,7 @@ class TestDataTablesBackend:
         assert len(res.json["data"]) == 1
         assert res.json["data"][0]["rodne_cislo"] == rodne_cislo
 
-    def test_json_backend_search_by_note(self, user, testapp):
+    def test_json_backend_search_by_note(self, user: User, testapp: TestApp) -> None:
         note_text = "FooBarBaz note special text"
         while True:
             first_rodne_cislo, second_rodne_cislo = sample_of_rc(2)
@@ -107,7 +112,7 @@ class TestDataTablesBackend:
         assert res.json["data"][1]["note"]["emails"] == []
         assert res.json["data"][1]["note"]["phones"] == []
 
-    def test_json_backend_note_structure(self, user, testapp):
+    def test_json_backend_note_structure(self, user: User, testapp: TestApp) -> None:
         """Test that note data is properly structured with emails, phones, and other text."""
         rodne_cislo = next(sample_of_rc(1))
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
@@ -146,7 +151,9 @@ class TestDataTablesBackend:
         assert "602123456" not in note_data["other"]
 
     @pytest.mark.parametrize("direction", ("asc", "desc"))
-    def test_json_backend_order_by_rodne_cislo(self, user, testapp, direction):
+    def test_json_backend_order_by_rodne_cislo(
+        self, user: User, testapp: TestApp, direction: str
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": list(DonorsOverview.frontend_column_names.keys()).index(
@@ -171,7 +178,9 @@ class TestDataTablesBackend:
             assert res.json["data"][index]["rodne_cislo"] == donor.rodne_cislo
 
     @pytest.mark.parametrize("direction", ("asc", "desc"))
-    def test_json_backend_order_by_donations(self, user, testapp, direction):
+    def test_json_backend_order_by_donations(
+        self, user: User, testapp: TestApp, direction: str
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": list(DonorsOverview.frontend_column_names.keys()).index(
@@ -199,7 +208,9 @@ class TestDataTablesBackend:
             )
 
     @pytest.mark.parametrize("direction", ("asc", "desc"))
-    def test_json_backend_order_by_medals(self, user, testapp, direction):
+    def test_json_backend_order_by_medals(
+        self, user: User, testapp: TestApp, direction: str
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": list(DonorsOverview.frontend_column_names.keys()).index(
@@ -236,7 +247,9 @@ class TestDataTablesBackend:
         assert res.json["data"][0]["last_award"] == expected_first_medal
 
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_json_backend_for_awarded_medals(self, user, testapp, db, medal_id):
+    def test_json_backend_for_awarded_medals(
+        self, user: User, testapp: TestApp, db: SQLAlchemy, medal_id: int
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": "0",
@@ -288,7 +301,9 @@ class TestDataTablesBackend:
             assert len(res.json["data"]) == count
 
     @pytest.mark.parametrize("direction", ("asc", "desc"))
-    def test_json_backend_order_by_utf_8(self, user, testapp, direction):
+    def test_json_backend_order_by_utf_8(
+        self, user: User, testapp: TestApp, direction: str
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": list(DonorsOverview.frontend_column_names.keys()).index(
@@ -327,7 +342,13 @@ class TestDataTablesBackend:
             (("Bláhová", "bláhová", "BLÁHOVÁ", "BlÁhOvÁ", "bLáHoVá"), 15),
         ),
     )
-    def test_json_backend_search_by_utf_8(self, user, testapp, last_names, count):
+    def test_json_backend_search_by_utf_8(
+        self,
+        user: User,
+        testapp: TestApp,
+        last_names: Tuple[str, str, str, str, str],
+        count: int,
+    ) -> None:
         params = {
             "draw": "1",
             "order[0][column]": 0,

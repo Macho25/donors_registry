@@ -2,11 +2,14 @@ import re
 from datetime import datetime, timedelta
 from math import ceil
 from tempfile import NamedTemporaryFile
+from unittest.mock import NonCallableMagicMock
 
 import pytest
 from flask import url_for
+from flask_sqlalchemy.extension import SQLAlchemy
 from openpyxl import load_workbook
 from sqlalchemy import and_
+from webtest.app import TestApp
 
 from registry.donor.models import (
     AwardedMedals,
@@ -19,14 +22,18 @@ from registry.donor.models import (
 )
 from registry.extensions import db
 from registry.list.models import Medals
-
-from .fixtures import delete_note_if_exists, new_rc_if_ignored, sample_of_rc
-from .helpers import login
+from registry.user.models import User
+from tests.fixtures import (
+    delete_note_if_exists,
+    new_rc_if_ignored,
+    sample_of_rc,
+)
+from tests.helpers import login
 
 
 class TestDetail:
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(50))
-    def test_detail(self, user, testapp, rodne_cislo):
+    def test_detail(self, user: User, testapp: TestApp, rodne_cislo: str):
         """Just a simple test that the detail page loads for some random donors"""
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
@@ -40,7 +47,7 @@ class TestDetail:
         assert sum(numbers[:-1]) == numbers[-1]
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(5))
-    def test_save_update_note(self, user, testapp, rodne_cislo):
+    def test_save_update_note(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         # Make sure no note exists for this RC
         delete_note_if_exists(rodne_cislo)
@@ -67,7 +74,7 @@ class TestDetail:
         assert Note.query.count() == existing_notes + 1
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(5))
-    def test_emails_in_notes(self, user, testapp, rodne_cislo):
+    def test_emails_in_notes(self, user: User, testapp: TestApp, rodne_cislo: str):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))
@@ -93,7 +100,9 @@ class TestDetail:
         assert '<a href="mailto:bar@example.com">bar@example.com</a>' in res.text
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(10))
-    def test_manual_import_prepare(self, user, testapp, rodne_cislo):
+    def test_manual_import_prepare(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
 
@@ -143,7 +152,9 @@ class TestDetail:
 
 class TestAwardDocument:
     @pytest.mark.parametrize("rodne_cislo", ("391105000", "9701037137", "151008110"))
-    def test_award_doc_for_man(self, user, testapp, rodne_cislo):
+    def test_award_doc_for_man(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ) -> None:
         overview = db.session.get(DonorsOverview, rodne_cislo)
         medals = Medals.query.all()
         login(user, testapp)
@@ -166,7 +177,9 @@ class TestAwardDocument:
             assert re.search(r"<img src=\"/static/stamps/.*\.png\"", doc.text)
 
     @pytest.mark.parametrize("rodne_cislo", ("0457098862", "0552277759", "0160031652"))
-    def test_award_doc_for_woman(self, user, testapp, rodne_cislo):
+    def test_award_doc_for_woman(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ) -> None:
         overview = db.session.get(DonorsOverview, rodne_cislo)
         medals = Medals.query.all()
         login(user, testapp)
@@ -189,7 +202,9 @@ class TestAwardDocument:
             assert re.search(r"<img src=\"/static/stamps/.*\.png\"", doc.text)
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(5))
-    def test_award_doc_dates(self, user, testapp, db, rodne_cislo):
+    def test_award_doc_dates(
+        self, user: User, testapp: TestApp, db: SQLAlchemy, rodne_cislo: str
+    ) -> None:
         today = datetime.now().strftime("%-d. %-m. %Y")
         login(user, testapp)
 
@@ -234,7 +249,9 @@ class TestAwardDocument:
         assert "Ve Frýdku-Místku, dne 17. 11. 1989" in doc
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(5))
-    def test_award_doc_today(self, user, testapp, db, rodne_cislo):
+    def test_award_doc_today(
+        self, user: User, testapp: TestApp, db: SQLAlchemy, rodne_cislo: str
+    ) -> None:
         """Test that if today is set in request arguments,
         document always content today's date"""
         today = datetime.now().strftime("%-d. %-m. %Y")
@@ -253,7 +270,7 @@ class TestAwardDocument:
             assert f"Ve Frýdku-Místku, dne {today}" in doc
 
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_award_prep_documents(self, user, testapp, medal_id):
+    def test_award_prep_documents(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
         medal_kr3 = Medals.query.filter(Medals.slug == "kr3").first_or_404()
         today = datetime.now().strftime("%-d. %-m. %Y") if medal < medal_kr3 else ""
@@ -272,7 +289,9 @@ class TestAwardDocument:
         assert rows == documents.text.count(f"Ve Frýdku-Místku, dne {today}")
 
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(3))
-    def test_email_award_document_no_email(self, user, testapp, rodne_cislo):
+    def test_email_award_document_no_email(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         login(user, testapp)
         res = testapp.get(url_for("donor.detail", rc=rodne_cislo))
@@ -307,7 +326,14 @@ class TestAwardDocument:
     @pytest.mark.parametrize("medal_id", range(1, 8))
     @pytest.mark.parametrize("rodne_cislo", sample_of_rc(2))
     def test_email_award_document(
-        self, user, testapp, note, expected_to, medal_id, rodne_cislo, mock_smtp
+        self,
+        user: User,
+        testapp: TestApp,
+        note: str,
+        expected_to: str,
+        medal_id: int,
+        rodne_cislo: str,
+        mock_smtp: NonCallableMagicMock,
     ):
         rodne_cislo = new_rc_if_ignored(rodne_cislo)
         medal = db.session.get(Medals, medal_id)
@@ -368,7 +394,9 @@ class TestAwardDocument:
 
 class TestConfirmationdDocument:
     @pytest.mark.parametrize("rodne_cislo", ("391105000", "9701037137", "151008110"))
-    def test_confirmation_doc_for_man(self, user, testapp, rodne_cislo):
+    def test_confirmation_doc_for_man(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ) -> None:
         overview = db.session.get(DonorsOverview, rodne_cislo)
         login(user, testapp)
         doc = testapp.get(url_for("donor.render_confirmation_document", rc=rodne_cislo))
@@ -393,7 +421,9 @@ class TestConfirmationdDocument:
             assert awarded_medal.medal.title in doc
 
     @pytest.mark.parametrize("rodne_cislo", ("0457098862", "0552277759", "0160031652"))
-    def test_confirmation_doc_for_woman(self, user, testapp, rodne_cislo):
+    def test_confirmation_doc_for_woman(
+        self, user: User, testapp: TestApp, rodne_cislo: str
+    ) -> None:
         overview = db.session.get(DonorsOverview, rodne_cislo)
         login(user, testapp)
         doc = testapp.get(url_for("donor.render_confirmation_document", rc=rodne_cislo))
@@ -420,7 +450,7 @@ class TestConfirmationdDocument:
 
 class TestEnvelopeLabels:
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_envelope_labels(self, user, testapp, medal_id):
+    def test_envelope_labels(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
 
         # Create snapshot for medals that require it
@@ -444,7 +474,7 @@ class TestEnvelopeLabels:
         labels_count = labels.text.count('<div class="label">')
         assert labels_count == eligible_donors
 
-    def test_envelope_labels_detail(self, user, testapp):
+    def test_envelope_labels_detail(self, user: User, testapp: TestApp):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -463,7 +493,9 @@ class TestEnvelopeLabels:
 
     @pytest.mark.parametrize("skip", (1, 3, 9, 13))
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_envelope_labels_skip(self, user, testapp, medal_id, skip):
+    def test_envelope_labels_skip(
+        self, user: User, testapp: TestApp, medal_id: int, skip: int
+    ):
         medal = db.session.get(Medals, medal_id)
 
         # Create snapshot for medals that require it
@@ -495,7 +527,9 @@ class TestEnvelopeLabels:
         assert space_p == skip * 2
 
     @pytest.mark.parametrize("skip", (-1, -33, 99, 16))
-    def test_envelope_labels_invalid_skip(self, user, testapp, skip):
+    def test_envelope_labels_invalid_skip(
+        self, user: User, testapp: TestApp, skip: int
+    ):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -504,7 +538,7 @@ class TestEnvelopeLabels:
 
         assert "Vynechat lze 0 až 15 štítků." in labels.text
 
-    def test_envelope_labels_empty_skip(self, user, testapp):
+    def test_envelope_labels_empty_skip(self, user: User, testapp: TestApp):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -530,7 +564,9 @@ class TestEnvelopeLabels:
         assert space_p == 0
 
     @pytest.mark.parametrize("medal_id", (-1, -33, 99, 16))
-    def test_envelope_labels_invalid_medal(self, user, testapp, medal_id):
+    def test_envelope_labels_invalid_medal(
+        self, user: User, testapp: TestApp, medal_id: int
+    ):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -539,7 +575,7 @@ class TestEnvelopeLabels:
 
         assert "Odeslána nevalidní data." in labels.text
 
-    def test_envelope_detail(self, user, testapp):
+    def test_envelope_detail(self, user: User, testapp: TestApp):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -557,7 +593,7 @@ class TestEnvelopeLabels:
             assert f"{donor.postal_code} {donor.city}" in labels.text
 
     @pytest.mark.parametrize("medal_id", (-1, -33, 99, 16))
-    def test_envelope_invalid_medal(self, user, testapp, medal_id):
+    def test_envelope_invalid_medal(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, 1)
         login(user, testapp)
         page = testapp.get(url_for("donor.award_prep", medal_slug=medal.slug))
@@ -569,7 +605,7 @@ class TestEnvelopeLabels:
 
 class TestAwardPrepExport:
     @pytest.mark.parametrize("medal_id", range(1, 8))
-    def test_award_prep_xlsx_table(self, user, testapp, medal_id):
+    def test_award_prep_xlsx_table(self, user: User, testapp: TestApp, medal_id: int):
         medal = db.session.get(Medals, medal_id)
         donation_centers = DonationCenter.query.all()
         dc_names = [dc.title for dc in donation_centers]

@@ -2,11 +2,12 @@ from pathlib import Path
 
 import pytest
 from flask import url_for
+from webtest.app import TestApp
 
 from registry.donor.models import Batch, DonorsOverview, Record
 from registry.extensions import db
-
-from .helpers import login
+from registry.user.models import User
+from tests.helpers import login
 
 
 class TestImport:
@@ -17,7 +18,9 @@ class TestImport:
         "input_file",
         ("tests/data/valid_import.txt", "tests/data/valid_import_single_record.txt"),
     )
-    def test_valid_input(self, user, testapp, input_file, donation_center_id):
+    def test_valid_input(
+        self, user: User, testapp: TestApp, input_file: str, donation_center_id: int
+    ) -> None:
         input_data = Path(input_file).read_text(encoding="utf-8")
         new_records = len(input_data.strip().splitlines())
         existing_records = Record.query.count()
@@ -47,7 +50,7 @@ class TestImport:
             == existing_batches + 1
         )
 
-    def test_repairable_input(self, user, testapp):
+    def test_repairable_input(self, user: User, testapp: TestApp) -> None:
         """Tests an input file the import machinery should be able
         repair automatically without any manual assistance from user"""
         input_data = Path("tests/data/repairable_import.txt").read_text(
@@ -81,7 +84,7 @@ class TestImport:
         assert Record.query.count() == existing_records + new_records
         assert Batch.query.count() == existing_batches + 1
 
-    def test_invalid_input(self, user, testapp):
+    def test_invalid_input(self, user: User, testapp: TestApp) -> None:
         """Tests an invalid import the app cannot fix automaticaly"""
         input_data = Path("tests/data/invalid_import.txt").read_text(encoding="utf-8")
         existing_records = Record.query.count()
@@ -108,7 +111,7 @@ class TestImport:
         assert Record.query.count() == existing_records
         assert Batch.query.count() == existing_batches
 
-    def test_invalid_input_invalid_rcs(self, user, testapp):
+    def test_invalid_input_invalid_rcs(self, user: User, testapp: TestApp) -> None:
         input_data = Path("tests/data/invalid_rc.txt").read_text(encoding="utf-8")
         existing_records = Record.query.count()
         existing_batches = Batch.query.count()
@@ -133,7 +136,7 @@ class TestImport:
         assert Record.query.count() == existing_records
         assert Batch.query.count() == existing_batches
 
-    def test_valid_manual_input(self, user, testapp):
+    def test_valid_manual_input(self, user: User, testapp: TestApp) -> None:
         input_data = Path("tests/data/valid_import.txt").read_text(encoding="utf-8")
         new_records = len(input_data.strip().splitlines())
         existing_records = Record.query.count()
@@ -160,7 +163,7 @@ class TestImport:
             == existing_batches + 1
         )
 
-    def test_invalid_donation_center(self, user, testapp):
+    def test_invalid_donation_center(self, user: User, testapp: TestApp) -> None:
         existing_records = Record.query.count()
         existing_batches = Batch.query.count()
 
@@ -182,7 +185,9 @@ class TestImport:
             "tests/data/valid_import_multiple_rc_dups.txt",
         ),
     )
-    def test_valid_import_with_multiple_rc(self, input_file, user, testapp):
+    def test_valid_import_with_multiple_rc(
+        self, input_file: str, user: User, testapp: TestApp
+    ) -> None:
         input_data = Path(input_file).read_text(encoding="utf-8")
         new_records = len(input_data.strip().splitlines())
         existing_records = Record.query.count()
@@ -203,7 +208,7 @@ class TestImport:
         db.session.get(DonorsOverview, "205225299").donation_count_total == 70
         db.session.get(DonorsOverview, "1860231599").donation_count_total == 6
 
-    def test_zero_donations(self, user, testapp):
+    def test_zero_donations(self, user: User, testapp: TestApp) -> None:
         # three lines in the input file end with zero and should
         # be automatically ommited from the import
         ends_with_zero = 3
@@ -226,7 +231,7 @@ class TestImport:
         assert Record.query.count() == existing_records + new_records
         assert Batch.query.count() == existing_batches + 1
 
-    def test_empty_input(self, user, testapp):
+    def test_empty_input(self, user: User, testapp: TestApp) -> None:
         """Regression test for issue #118"""
         existing_batches = Batch.query.count()
 
@@ -258,7 +263,7 @@ class TestImport:
         assert "Vstupní data z odběrného místa - Chybí vstupní data" in res
         assert Batch.query.count() == existing_batches
 
-    def test_all_zero_donations(self, user, testapp):
+    def test_all_zero_donations(self, user: User, testapp: TestApp) -> None:
         """
         Tests if the system displays a warning for an input with all of the
         donations set to 0
@@ -354,7 +359,12 @@ class TestImport:
         ),
     )
     def test_import_degrees(
-        self, input_line, expected_first_name, expected_last_name, user, testapp
+        self,
+        input_line: str,
+        expected_first_name: str,
+        expected_last_name: str,
+        user: User,
+        testapp: TestApp,
     ):
         login(user, testapp)
         res = testapp.get(url_for("batch.import_data"))
@@ -382,7 +392,9 @@ class TestImport:
             ("50+50", 100),
         ),
     )
-    def test_import_with_sum_valid(self, user, testapp, expr, result):
+    def test_import_with_sum_valid(
+        self, user: User, testapp: TestApp, expr: str, result: int
+    ):
         login(user, testapp)
 
         existing_batches = Batch.query.count()
@@ -416,7 +428,9 @@ class TestImport:
             "50+_POČET_",
         ),
     )
-    def test_import_with_sum_invalid(self, user, testapp, expr):
+    def test_import_with_sum_invalid(
+        self, user: User, testapp: TestApp, expr: str
+    ) -> None:
         login(user, testapp)
 
         existing_batches = Batch.query.count()
@@ -451,8 +465,13 @@ class TestImport:
         ),
     )
     def test_prepare_trinec_valid_file(
-        self, user, testapp, filename, valid_lines, skipped_lines
-    ):
+        self,
+        user: User,
+        testapp: TestApp,
+        filename: str,
+        valid_lines: int,
+        skipped_lines: int,
+    ) -> None:
         """Test uploading valid Třinec Excel file"""
         login(user, testapp)
 
@@ -486,7 +505,7 @@ class TestImport:
         lines = form["input_data"].value.splitlines()
         assert "0407156596;DANIEL;DOLEŽAL" in lines[0]
 
-    def test_prepare_trinec_no_file(self, user, testapp):
+    def test_prepare_trinec_no_file(self, user: User, testapp: TestApp) -> None:
         """Test submitting Třinec form without file"""
         login(user, testapp)
 
@@ -498,7 +517,7 @@ class TestImport:
         assert res.status_code == 200
         assert "Nebyl vybrán žádný soubor" in res
 
-    def test_prepare_trinec_empty_filename(self, user, testapp):
+    def test_prepare_trinec_empty_filename(self, user: User, testapp: TestApp) -> None:
         """Test submitting Třinec form with empty filename"""
         login(user, testapp)
 
@@ -511,7 +530,9 @@ class TestImport:
         assert res.status_code == 200
         assert "Nebyl vybrán žádný soubor" in res
 
-    def test_prepare_trinec_general_exception(self, user, testapp):
+    def test_prepare_trinec_general_exception(
+        self, user: User, testapp: TestApp
+    ) -> None:
         """Test general exception handling in Třinec file processing"""
         login(user, testapp)
 
@@ -530,7 +551,9 @@ class TestImport:
         assert res.status_code == 200
         assert "Při zpracování souboru došlo k chybě" in res
 
-    def test_prepare_trinec_corrupted_table_header(self, user, testapp):
+    def test_prepare_trinec_corrupted_table_header(
+        self, user: User, testapp: TestApp
+    ) -> None:
         """Test submitting Excel file with corrupted table header"""
         login(user, testapp)
 
@@ -564,8 +587,13 @@ class TestImport:
         ),
     )
     def test_prepare_trinec_full_workflow(
-        self, user, testapp, filename, valid_lines, skipped_lines
-    ):
+        self,
+        user: User,
+        testapp: TestApp,
+        filename: str,
+        valid_lines: int,
+        skipped_lines: int,
+    ) -> None:
         """Test complete workflow: upload Třinec file and import data"""
         login(user, testapp)
 
@@ -603,7 +631,9 @@ class TestImport:
         latest_batch = Batch.query.order_by(Batch.id.desc()).first()
         assert latest_batch.donation_center_id == 3
 
-    def test_prepare_trinec_full_workflow_repairable_data(self, user, testapp):
+    def test_prepare_trinec_full_workflow_repairable_data(
+        self, user: User, testapp: TestApp
+    ) -> None:
         """Test complete workflow with repairable data"""
         login(user, testapp)
 
